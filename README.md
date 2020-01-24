@@ -44,6 +44,20 @@ like so:
 python generate.py cache/logs/nodp/checkpoint-3749.pth -o nodp.png
 ```
 
+## Compute inception score
+
+After training a GAN you can estimate the inception score from created
+checkpoints.  For this you first need to train an MNIST classifier by `python
+build-classifier.py`.  Classifier-inferred probabilities are used to compute
+the inceptions core.  This is done in the script by running:
+
+```bash
+python inception.py -p <path-to-checkpoint/'MNIST'>
+```
+
+By not prividing a checkpoint or 'MNIST', you will compute the inception score
+of the MNIST testing set.
+
 ## Authors
 
 * Justus Schwabedal
