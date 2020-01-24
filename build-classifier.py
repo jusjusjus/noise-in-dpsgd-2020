@@ -13,6 +13,8 @@ from torchvision import datasets
 
 from ganlib.classifier import Classifier
 
+torch.manual_seed(42 * 42)
+
 class Dataset(datasets.MNIST):
 
     def __init__(self, *args, **kwargs):
@@ -47,11 +49,12 @@ def evaluate(model, dataloader):
     model.train()
     return 100 * acc
 
+
 def schedule(lr, loss):
-    return lr if loss > 1.0 else lr * loss
+    return lr if loss > 1.0 else loss * lr
 
 
-epochs = 3
+epochs = 10
 batch_size = 128
 lr_per_example = 1e-4
 eval_every = 1000
@@ -100,7 +103,8 @@ for epoch in range(epochs):
             print(f"[{global_step}, epoch {epoch+1}] "
                   f"train loss = {running_loss:.3f}, "
                   f"new learning rate = {lr:.5f}")
-            optimizer = optim.Adam(clf.parameters(), lr=lr, weight_decay=weight_decay)
+            for g in optimizer.param_groups:
+                g.update(lr=lr)
 
         if global_step % eval_every == 0:
             acc = evaluate(clf, testloader)
