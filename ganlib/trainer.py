@@ -56,7 +56,8 @@ class WGANGPTrainer:
         return log
 
     def critic_step(self, gan, imgs):
-        generator, critic = gan.generator, gan.critic
+        generator = gan.generator.eval()
+        critic = gan.critic.train()
         batch_size = imgs.shape[0]
         real_imgs = Variable(imgs.type(FloatTensor))
         log = {}

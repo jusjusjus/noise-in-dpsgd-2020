@@ -100,18 +100,18 @@ class MNISTGenerator(Optimizable):
     def get_latent_variable(self, batch_size):
         shp = (batch_size, self.latent_dim)
         device = next(self.parameters()).device
-        W = torch.rand(*shp, dtype=torch.float32, device=device)
-        return 2 * W - 1
+        return torch.randn(*shp, dtype=torch.float32, device=device)
 
-    def compute_sample_images(self, n: int, cuda: bool = cuda, labels=None):
+    def compute_sample_images(self, n: int, cuda: bool = cuda):
         """return `n` image"""
         self.eval()
         with torch.no_grad():
-            z = torch.randn(n, self.latent_dim)
+            z = torch.get_latent_variable(n)
             z = z.cuda() if cuda else z
             z = Variable(z)  # type: ignore
             imgs = self(z)  # type: ignore
             imgs = imgs.data.cpu().numpy()
+
         return imgs
 
     def compute_joined_sample_images(self, num_rows=3, cuda=cuda):
