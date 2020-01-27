@@ -106,7 +106,7 @@ class MNISTGenerator(Optimizable):
         """return `n` image"""
         self.eval()
         with torch.no_grad():
-            z = torch.get_latent_variable(n)
+            z = self.get_latent_variable(n)
             z = z.cuda() if cuda else z
             z = Variable(z)  # type: ignore
             imgs = self(z)  # type: ignore
