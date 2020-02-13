@@ -34,6 +34,9 @@ Tensorboard logs are automatically written during training.  See them by
 running `tensorboard --logdir cache/logs` and navigating your browser to
 "http://localhost:6006".
 
+Note, if you want to compute the inception score during training from each
+model checkpoint, you need to first train a classifier (see below).
+
 ## Generating samples
 
 To generate samples from a checkpoint us the script "/generate.py".  For

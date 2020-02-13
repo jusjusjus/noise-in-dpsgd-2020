@@ -42,7 +42,7 @@ num_images = opt.num_rows ** 2
 ckpt = torch.load(opt.params, map_location='cpu' if opt.cpu else None)
 generator = MNISTGenerator.from_state_dict(ckpt['state_dict']['generator'])
 generator = generator.cuda() if cuda else generator
-images = generator.compute_sample_images(num_images, cuda=cuda)
+images = generator.compute_sample_images(num_images)
 # join and plot images
 images = join_image_batch(images, opt.num_rows)
 plot_images(images)

@@ -8,6 +8,10 @@ parser = ArgumentParser(description="Compute inception score")
 parser.add_argument("-p", "--params", type=str, default='MNIST',
                     help="'MNIST' or path to model checkpoint")
 parser.add_argument('--cpu', action='store_true', help="use cpu only")
+parser.add_argument('--splits', type=int, default=10,
+                    help="boot-strapping splits")
+parser.add_argument('--quiet', action='store_true',
+                    help="only output inception score")
 opt = parser.parse_args()
 
 import torch
@@ -37,7 +41,6 @@ class Dataset(datasets.MNIST):
         return img
 
 
-splits = 10
 epochs = 3
 batch_size = 128
 lr_per_example = 1e-4
@@ -80,8 +83,8 @@ with torch.no_grad():
 # Compute inception score with bootstrapped standard deviation
 
 scores = []
-for i in range(splits):
-    P_yx = probs[i::splits]
+for i in range(opt.splits):
+    P_yx = probs[i::opt.splits]
     P_y = P_yx.mean(0, keepdims=True)
     P_yx = np.maximum(P_yx, 1e-12)
     P_y = np.maximum(P_y, 1e-12)
@@ -89,5 +92,9 @@ for i in range(splits):
     s_G = np.exp(np.mean(KL_div))
     scores.append(s_G)
 
-mean_score, std_score = np.mean(scores), np.std(scores)
-print(f"Inception score: {mean_score:.3f} +/- {std_score:.3f}")
+mean_score = np.mean(scores)
+if opt.quiet:
+    print(mean_score)
+else:
+    std_score = np.std(scores)
+    print(f"Inception score: {mean_score:.3f} +/- {std_score:.3f}")

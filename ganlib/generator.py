@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-cuda = torch.cuda.is_available()
 
 def join_image_batch(images, num_rows):
     images = images.squeeze()
@@ -34,6 +33,10 @@ class Optimizable(nn.Module):
             k: getattr(self, k)
             for k in self.config_params
         }
+
+    @property
+    def device(self):
+        return next(self.parameters()).device
 
     def get_state_dict(self):
         return {
@@ -99,24 +102,23 @@ class MNISTGenerator(Optimizable):
 
     def get_latent_variable(self, batch_size):
         shp = (batch_size, self.latent_dim)
-        device = next(self.parameters()).device
-        return torch.randn(*shp, dtype=torch.float32, device=device)
+        return torch.randn(*shp, dtype=torch.float32, device=self.device)
 
-    def compute_sample_images(self, n: int, cuda: bool = cuda):
-        """return `n` image"""
+    def compute_sample_images(self, n: int):
+        """return `n` images"""
         self.eval()
         with torch.no_grad():
             z = self.get_latent_variable(n)
-            z = z.cuda() if cuda else z
+            z = z.to(self.device)
             z = Variable(z)  # type: ignore
             imgs = self(z)  # type: ignore
             imgs = imgs.data.cpu().numpy()
 
         return imgs
 
-    def compute_joined_sample_images(self, num_rows=3, cuda=cuda):
+    def compute_joined_sample_images(self, num_rows=3):
         """return joined image batch with num_rows x num_rows images"""
-        imgs = self.compute_sample_images(num_rows ** 2, cuda=cuda)
+        imgs = self.compute_sample_images(num_rows ** 2)
         return join_image_batch(imgs, num_rows)
 
     def dataloader(self, batch_size, num_batches=256):
@@ -130,6 +132,7 @@ class MNISTGenerator(Optimizable):
                         latent = self.get_latent_variable(batch_size)
                         latent = Variable(latent)
                         imgs = self(latent)  # type: ignore
+
                     yield imgs
 
         return _dataloader()

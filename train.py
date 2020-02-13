@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
 from os import makedirs
-from os.path import join, dirname
+from os.path import join, dirname, exists
 from sys import path
 path.insert(0, '.')
 from argparse import ArgumentParser
@@ -84,6 +84,9 @@ def log(logger, info, tag, network, global_step):
         ckpt = logger.add_checkpoint(network, global_step)
         scripts.generate(logger=logger, params=ckpt,
                          step=global_step)
+        if exists(join("cache", "mnist_classifier.ckpt")):
+            scripts.inception(logger=logger, params=ckpt,
+                              step=global_step)
         network.train()
 
 # Set optional parameters
