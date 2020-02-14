@@ -9,9 +9,9 @@ from argparse import ArgumentParser
 parser = ArgumentParser(description="Train MNIST generator with DP-WGAN-GP")
 parser.add_argument('--nodp', action='store_true',
                     help="Train without differential privacy")
-parser.add_argument('--sigma', type=float, default=1.0,
+parser.add_argument('--sigma', type=float, default=0.5,
                     help="Ratio of noise std. dev. and mechanism L2-norm")
-parser.add_argument('--grad-clip', type=float, default=4.0,
+parser.add_argument('--grad-clip', type=float, default=1.0,
                     help="L2-norm clipping parameter")
 opt = parser.parse_args()
 
