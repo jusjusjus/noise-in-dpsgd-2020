@@ -9,27 +9,11 @@ from PIL import Image
 from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
-from torchvision import datasets
 
+from ganlib.dataset import Dataset
 from ganlib.classifier import Classifier
 
 torch.manual_seed(42 * 42)
-
-class Dataset(datasets.MNIST):
-
-    def __init__(self, *args, **kwargs):
-        data_dir = join('cache', 'data')
-        makedirs(data_dir, exist_ok=True)
-        super().__init__(data_dir, *args, download=True, **kwargs)
-
-    def __getitem__(self, i):
-        img, labels = super().__getitem__(i)
-        img = img.resize((28, 28), Image.ANTIALIAS)
-        img = np.array(img)[None, ...]
-        img = img.astype(np.float32) / 255.0
-        img = 2 * img - 1
-        return img, labels
-
 
 def evaluate(model, dataloader):
     model.eval()

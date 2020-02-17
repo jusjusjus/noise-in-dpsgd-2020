@@ -27,26 +27,12 @@ torch.manual_seed(42 * 42)
 from ganlib import scripts
 from ganlib.gan import GenerativeAdversarialNet
 from ganlib.logger import Logger
+from ganlib.dataset import Dataset
 from ganlib.privacy import compute_renyi_privacy
 from ganlib.trainer import DPWGANGPTrainer, WGANGPTrainer
 from ganlib.generator import MNISTGenerator, Optimizable
 
 cuda = torch.cuda.is_available()
-
-class Dataset(datasets.MNIST):
-
-    def __init__(self, *args, **kwargs):
-        data_dir = join('cache', 'data')
-        makedirs(data_dir, exist_ok=True)
-        super().__init__(data_dir, *args, download=True, **kwargs)
-
-    def __getitem__(self, i):
-        img, _ = super().__getitem__(i)
-        img = img.resize((28, 28), Image.ANTIALIAS)
-        img = np.array(img)[None, ...]
-        img = img.astype(np.float32) / 255.0
-        img = 2 * img - 1
-        return img
 
 
 class MNISTCritic(Optimizable):
