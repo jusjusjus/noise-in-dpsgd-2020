@@ -1,6 +1,8 @@
 
 from os import makedirs
 from os.path import join
+
+import numpy as np
 from torchvision import datasets
 
 
@@ -14,7 +16,6 @@ class Dataset(datasets.MNIST):
 
     def __getitem__(self, i):
         img, labels = super().__getitem__(i)
-        img = img.resize((28, 28), Image.ANTIALIAS)
         img = np.array(img)[None, ...]
         img = img.astype(np.float32) / 255.0
         img = 2 * img - 1
