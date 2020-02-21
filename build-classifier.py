@@ -9,6 +9,7 @@ from PIL import Image
 from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
+from torchvision.transforms import Compose, ToTensor, Normalize, RandomAffine
 
 from ganlib.dataset import Dataset
 from ganlib.classifier import Classifier
@@ -38,7 +39,7 @@ def schedule(lr, loss):
     return lr if loss > 1.0 else loss * lr
 
 
-epochs = 10
+epochs = 20
 batch_size = 128
 lr_per_example = 1e-4
 eval_every = 1000
@@ -51,8 +52,11 @@ learning_rate = batch_size * lr_per_example
 
 print(f"learning rate: {learning_rate} (at {batch_size}-minibatches)")
 
-trainset =  Dataset(train=True)
-testset =  Dataset(train=False)
+trafo = Compose([RandomAffine(degrees=10, shear=10, scale=(0.95, 1.15)),
+                 ToTensor(), Normalize([0.5], [0.5], inplace=True)])
+
+trainset =  Dataset(transform=trafo, train=True, labels=True)
+testset =  Dataset(train=False, labels=True)
 trainloader = DataLoader(trainset, batch_size=batch_size,
                          shuffle=True, num_workers=4)
 testloader = DataLoader(testset, batch_size=batch_size,
@@ -83,7 +87,7 @@ for epoch in range(epochs):
         running_loss = 0.99 * running_loss + 0.01 * loss.item()
 
         if global_step % adapt_every == 0:
-            lr = schedule(learning_rate, running_loss)
+            lr = 0.9 ** epoch * schedule(learning_rate, running_loss)
             print(f"[{global_step}, epoch {epoch+1}] "
                   f"train loss = {running_loss:.3f}, "
                   f"new learning rate = {lr:.5f}")
@@ -94,7 +98,7 @@ for epoch in range(epochs):
             acc = evaluate(clf, testloader)
             print(f"[{global_step}, epoch {epoch+1}] "
                   f"train loss = {running_loss:.3f}, "
-                  f"test acc = {acc:.1f}")
+                  f"test acc = {acc:.2f} %")
 
             if acc > best_acc:
                 clf.to_checkpoint(best_model_filename)
