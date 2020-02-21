@@ -13,6 +13,10 @@ parser.add_argument('--sigma', type=float, default=0.5,
                     help="Ratio of noise std. dev. and mechanism L2-norm")
 parser.add_argument('--grad-clip', type=float, default=1.0,
                     help="L2-norm clipping parameter")
+parser.add_argument('--epochs', type=int, default=100,
+                    help="number of epochs to train the GAN")
+parser.add_argument('--critic-steps', type=int, default=4,
+                    help="number of critic steps per generator step")
 opt = parser.parse_args()
 
 import torch
@@ -85,7 +89,6 @@ clip = opt.grad_clip
 batch_size = 128
 lr_per_example = 3.125e-6
 delta = 1e-5
-critic_steps = 4
 
 # Process parameters
 
@@ -125,10 +128,10 @@ print(f"> learning rate = {learning_rate} (at {batch_size}-minibatches)")
 logs = {}
 global_step = 0
 logger = Logger(logdir=logdir)
-for epoch in range(100):
+for epoch in range(opt.epochs):
     for imgs in dataloader:
 
-        if (global_step + 1) % critic_steps == 0:
+        if (global_step + 1) % opt.critic_steps == 0:
             genlog = trainer.generator_step(gan)
             logs.update(**genlog)
 
