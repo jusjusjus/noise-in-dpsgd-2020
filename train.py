@@ -7,6 +7,10 @@ path.insert(0, '.')
 from argparse import ArgumentParser
 
 parser = ArgumentParser(description="Train MNIST generator with DP-WGAN-GP")
+parser.add_argument('--capacity', type=int, default=64,
+                    help="number-of-filters factor in GAN")
+parser.add_argument('--critic-steps', type=int, default=4,
+                    help="number of critic steps per generator step")
 parser.add_argument('--nodp', action='store_true',
                     help="Train without differential privacy")
 parser.add_argument('--sigma', type=float, default=0.5,
@@ -15,8 +19,6 @@ parser.add_argument('--grad-clip', type=float, default=1.0,
                     help="L2-norm clipping parameter")
 parser.add_argument('--epochs', type=int, default=100,
                     help="number of epochs to train the GAN")
-parser.add_argument('--critic-steps', type=int, default=4,
-                    help="number of critic steps per generator step")
 opt = parser.parse_args()
 
 import torch
@@ -41,10 +43,10 @@ cuda = torch.cuda.is_available()
 
 class MNISTCritic(Optimizable):
 
-    def __init__(self):
+    def __init__(self, capacity):
         super().__init__()
+        C = capacity
         kw = {'padding': 2, 'stride': 2, 'kernel_size': 5}
-        C = capacity = 64
         self.activation = nn.LeakyReLU(negative_slope=0.2)
         self.conv1 = nn.Conv2d(1,     1 * C, **kw)
         self.conv2 = nn.Conv2d(1 * C, 2 * C, **kw)
@@ -79,28 +81,25 @@ def log(logger, info, tag, network, global_step):
                               step=global_step)
         network.train()
 
-# Set optional parameters
-
-sigma = opt.sigma
-clip = opt.grad_clip
-
 # Set default parameters
 
+delta = 1e-5
 batch_size = 128
 lr_per_example = 3.125e-6
-delta = 1e-5
 
 # Process parameters
 
-logdir = join('cache', 'logs')
-logdir = join(logdir, 'nodp' if opt.nodp else f"sigma_{sigma}-clip_{clip}")
 learning_rate = batch_size * lr_per_example
+logdir = join('cache', 'logs')
+logdir = join(logdir, f"cap_{opt.capacity}-steps_{opt.critic_steps}")
+if not opt.nodp:
+    logdir += f"-sig_{opt.sigma}-clip_{opt.grad_clip}"
 
 # Initialize generator and critic.  We wrap generator and critic into
 # `GenerativeAdversarialNet` and provide methods `cuda` and `state_dict`
 
-generator = MNISTGenerator()
-critic = MNISTCritic()
+generator = MNISTGenerator(opt.capacity)
+critic = MNISTCritic(opt.capacity)
 gan = GenerativeAdversarialNet(generator, critic)
 gan = gan.cuda() if cuda else gan
 
@@ -115,13 +114,13 @@ generator.init_optimizer(torch.optim.Adam, lr=learning_rate, betas=(0.5, 0.9))
 critic.init_optimizer(torch.optim.Adam, lr=learning_rate, betas=(0.5, 0.9))
 
 if opt.nodp:
-    trainer = WGANGPTrainer(batch_size=batch_size)
+    trainer = WGANGPTrainer(batch_size)
 else:
     print("training with differential privacy")
     print(f"> delta = {delta}")
-    print(f"> sigma = {sigma}")
-    print(f"> L2-clip = {clip}")
-    trainer = DPWGANGPTrainer(sigma=sigma, l2_clip=clip, batch_size=batch_size)
+    print(f"> sigma = {opt.sigma}")
+    print(f"> L2-clip = {opt.grad_clip}")
+    trainer = DPWGANGPTrainer(opt.sigma, opt.grad_clip, batch_size=batch_size)
 
 print(f"> learning rate = {learning_rate} (at {batch_size}-minibatches)")
 

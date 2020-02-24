@@ -70,10 +70,10 @@ class Optimizable(nn.Module):
 
 class MNISTGenerator(Optimizable):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, capacity):
+        super().__init__(capacity=capacity)
         self.latent_dim = 128
-        C = self.capacity = 64
+        C = self.capacity = capacity
         
         lin_out_features = 4 * 4 * 4 * C
         self.activation = nn.ReLU()
