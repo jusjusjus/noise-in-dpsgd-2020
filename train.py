@@ -23,6 +23,8 @@ parser.add_argument('--print-every', type=int, default=25,
                     help="print every x steps")
 parser.add_argument('--eval-every', type=int, default=500,
                     help="evaluate every x steps")
+parser.add_argument('--continue-from', type=str, default=None,
+                    help="continue training from a checkpoint")
 opt = parser.parse_args()
 
 import torch
@@ -127,8 +129,17 @@ else:
 
 print(f"> learning rate = {learning_rate} (at {batch_size}-minibatches)")
 
+if opt.continue_from:
+    ckpt = torch.load(opt.continue_from)
+    global_step = ckpt['global_step'] + 1
+    ckpt = ckpt['state_dict']
+    gan.generator.load_state_dict(ckpt['generator']['params'])
+    gan.critic.load_state_dict(ckpt['critic']['params'])
+    print(f"Continuing from step {global_step} ..")
+else:
+    global_step = 0
+
 logs = {}
-global_step = 0
 logger = Logger(logdir=logdir)
 for epoch in range(opt.epochs):
     for imgs in dataloader:
