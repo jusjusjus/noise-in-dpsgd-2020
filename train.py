@@ -139,7 +139,7 @@ for epoch in range(opt.epochs):
         
         if not opt.nodp:
             spent = compute_renyi_privacy(
-                len(dset), batch_size, global_step + 1, sigma, delta)
+                len(dset), batch_size, global_step + 1, opt.sigma, delta)
             logs['epsilon'] = spent.eps
 
         log(logger, logs, 'train', gan, global_step)
