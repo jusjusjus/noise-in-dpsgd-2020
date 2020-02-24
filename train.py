@@ -19,6 +19,10 @@ parser.add_argument('--grad-clip', type=float, default=1.0,
                     help="L2-norm clipping parameter")
 parser.add_argument('--epochs', type=int, default=100,
                     help="number of epochs to train the GAN")
+parser.add_argument('--print-every', type=int, default=25,
+                    help="print every x steps")
+parser.add_argument('--eval-every', type=int, default=500,
+                    help="evaluate every x steps")
 opt = parser.parse_args()
 
 import torch
@@ -65,14 +69,13 @@ class MNISTCritic(Optimizable):
 
 
 def log(logger, info, tag, network, global_step):
-    """print every 25, and plot every 250 steps network output"""
-    if global_step % 25 == 0:
+    if global_step % opt.print_every == 0:
         logger.add_scalars(tag, info, global_step)
         s = f"[Step {global_step}] "
         s += ' '.join(f"{tag}/{k} = {v:.3g}" for k, v in info.items())
         print(s)
 
-    if (global_step + 1) % 250 == 0:
+    if global_step % opt.eval_every == 0:
         ckpt = logger.add_checkpoint(network, global_step)
         scripts.generate(logger=logger, params=ckpt,
                          step=global_step)
@@ -130,7 +133,7 @@ logger = Logger(logdir=logdir)
 for epoch in range(opt.epochs):
     for imgs in dataloader:
 
-        if (global_step + 1) % opt.critic_steps == 0:
+        if global_step % opt.critic_steps == 0:
             genlog = trainer.generator_step(gan)
             logs.update(**genlog)
 
@@ -143,5 +146,4 @@ for epoch in range(opt.epochs):
             logs['epsilon'] = spent.eps
 
         log(logger, logs, 'train', gan, global_step)
-
         global_step += 1
