@@ -7,3 +7,4 @@ tensorflow==2.0.1
 torchvision==0.4.2
 tensorboard==1.15.0
 tensorflow-privacy==0.2.2
+git+ssh://git@github.com/jusjusjus/autograd-hacks.git
