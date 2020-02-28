@@ -4,6 +4,7 @@ from os import makedirs
 from os.path import join, dirname, exists
 from sys import path
 path.insert(0, '.')
+from time import time
 from argparse import ArgumentParser
 
 parser = ArgumentParser(description="Train MNIST generator with DP-WGAN-GP")
@@ -23,8 +24,10 @@ parser.add_argument('--print-every', type=int, default=25,
                     help="print every x steps")
 parser.add_argument('--eval-every', type=int, default=500,
                     help="evaluate every x steps")
+parser.add_argument('--seed', type=int, default=42 * 42, help="pytorch seed")
 parser.add_argument('--continue-from', type=str, default=None,
                     help="continue training from a checkpoint")
+parser.add_argument('--dp-opt', action='store_true')
 opt = parser.parse_args()
 
 import torch
@@ -34,14 +37,14 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-torch.manual_seed(42 * 42)
+torch.manual_seed(opt.seed)
 
 from ganlib import scripts
 from ganlib.gan import GenerativeAdversarialNet
 from ganlib.logger import Logger
 from ganlib.dataset import Dataset
 from ganlib.privacy import compute_renyi_privacy
-from ganlib.trainer import DPWGANGPTrainer, WGANGPTrainer
+from ganlib.trainer import DPWGANGPTrainer2, DPWGANGPTrainer, WGANGPTrainer
 from ganlib.generator import MNISTGenerator, Optimizable
 
 cuda = torch.cuda.is_available()
@@ -100,6 +103,9 @@ logdir = join(logdir, f"cap_{opt.capacity}-steps_{opt.critic_steps}")
 if not opt.nodp:
     logdir += f"-sig_{opt.sigma}-clip_{opt.grad_clip}"
 
+if opt.dp_opt:
+    logdir += "-dp2"
+
 # Initialize generator and critic.  We wrap generator and critic into
 # `GenerativeAdversarialNet` and provide methods `cuda` and `state_dict`
 
@@ -125,7 +131,11 @@ else:
     print(f"> delta = {delta}")
     print(f"> sigma = {opt.sigma}")
     print(f"> L2-clip = {opt.grad_clip}")
-    trainer = DPWGANGPTrainer(opt.sigma, opt.grad_clip, batch_size=batch_size)
+    if opt.dp_opt:
+        trainer = DPWGANGPTrainer2(opt.sigma, opt.grad_clip / batch_size, batch_size=batch_size)
+        trainer.initialize_critic(gan)
+    else:
+        trainer = DPWGANGPTrainer(opt.sigma, opt.grad_clip, batch_size=batch_size)
 
 print(f"> learning rate = {learning_rate} (at {batch_size}-minibatches)")
 
@@ -142,19 +152,23 @@ else:
 logs = {}
 logger = Logger(logdir=logdir)
 for epoch in range(opt.epochs):
+    t0 = time()
     for imgs in dataloader:
 
-        if global_step % opt.critic_steps == 0:
-            genlog = trainer.generator_step(gan)
-            logs.update(**genlog)
+        # if global_step % opt.critic_steps == 0:
+        #     genlog = trainer.generator_step(gan)
+        #     logs.update(**genlog)
 
         critlog = trainer.critic_step(gan, imgs)
+        t1 = time()
+        logs['sampling_rate'] = batch_size / (t1 - t0)
         logs.update(**critlog)
         
-        if not opt.nodp:
+        if not opt.nodp and global_step % opt.print_every == 0:
             spent = compute_renyi_privacy(
                 len(dset), batch_size, global_step + 1, opt.sigma, delta)
             logs['epsilon'] = spent.eps
 
         log(logger, logs, 'train', gan, global_step)
         global_step += 1
+        t0 = t1
