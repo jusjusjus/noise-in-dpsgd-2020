@@ -20,6 +20,8 @@ parser.add_argument('--grad-clip', type=float, default=1.0,
                     help="L2-norm clipping parameter")
 parser.add_argument('--epochs', type=int, default=100,
                     help="number of epochs to train the GAN")
+parser.add_argument('--batch-size', type=int, default=128,
+                    help="set mini-batch size for training")
 parser.add_argument('--print-every', type=int, default=25,
                     help="print every x steps")
 parser.add_argument('--eval-every', type=int, default=500,
@@ -27,7 +29,6 @@ parser.add_argument('--eval-every', type=int, default=500,
 parser.add_argument('--seed', type=int, default=42 * 42, help="pytorch seed")
 parser.add_argument('--continue-from', type=str, default=None,
                     help="continue training from a checkpoint")
-parser.add_argument('--dp-opt', action='store_true')
 opt = parser.parse_args()
 
 import torch
@@ -44,7 +45,7 @@ from ganlib.gan import GenerativeAdversarialNet
 from ganlib.logger import Logger
 from ganlib.dataset import Dataset
 from ganlib.privacy import compute_renyi_privacy
-from ganlib.trainer import DPWGANGPTrainer2, DPWGANGPTrainer, WGANGPTrainer
+from ganlib.trainer import DPWGANGPTrainer, WGANGPTrainer
 from ganlib.generator import MNISTGenerator, Optimizable
 
 cuda = torch.cuda.is_available()
@@ -92,19 +93,15 @@ def log(logger, info, tag, network, global_step):
 # Set default parameters
 
 delta = 1e-5
-batch_size = 128
 lr_per_example = 3.125e-6
 
 # Process parameters
 
-learning_rate = batch_size * lr_per_example
+learning_rate = opt.batch_size * lr_per_example
 logdir = join('cache', 'logs')
-logdir = join(logdir, f"cap_{opt.capacity}-steps_{opt.critic_steps}")
+logdir = join(logdir, f"cap_{opt.capacity}-steps_{opt.critic_steps}-batchsize_{opt.batch_size}")
 if not opt.nodp:
     logdir += f"-sig_{opt.sigma}-clip_{opt.grad_clip}"
-
-if opt.dp_opt:
-    logdir += "-dp2"
 
 # Initialize generator and critic.  We wrap generator and critic into
 # `GenerativeAdversarialNet` and provide methods `cuda` and `state_dict`
@@ -115,7 +112,7 @@ gan = GenerativeAdversarialNet(generator, critic)
 gan = gan.cuda() if cuda else gan
 
 dset = Dataset()
-dataloader = DataLoader(dset, batch_size=batch_size,
+dataloader = DataLoader(dset, batch_size=opt.batch_size,
                         shuffle=True, num_workers=4)
 
 # Initialize optimization.  We make optimizers part of the network and provide
@@ -125,19 +122,15 @@ generator.init_optimizer(torch.optim.Adam, lr=learning_rate, betas=(0.5, 0.9))
 critic.init_optimizer(torch.optim.Adam, lr=learning_rate, betas=(0.5, 0.9))
 
 if opt.nodp:
-    trainer = WGANGPTrainer(batch_size)
+    trainer = WGANGPTrainer(opt.batch_size)
 else:
     print("training with differential privacy")
     print(f"> delta = {delta}")
     print(f"> sigma = {opt.sigma}")
     print(f"> L2-clip = {opt.grad_clip}")
-    if opt.dp_opt:
-        trainer = DPWGANGPTrainer2(opt.sigma, opt.grad_clip / batch_size, batch_size=batch_size)
-        trainer.initialize_critic(gan)
-    else:
-        trainer = DPWGANGPTrainer(opt.sigma, opt.grad_clip, batch_size=batch_size)
+    trainer = DPWGANGPTrainer(opt.sigma, opt.grad_clip, batch_size=opt.batch_size)
 
-print(f"> learning rate = {learning_rate} (at {batch_size}-minibatches)")
+print(f"> learning rate = {learning_rate} (at {opt.batch_size}-minibatches)")
 
 if opt.continue_from:
     ckpt = torch.load(opt.continue_from)
@@ -154,19 +147,17 @@ logger = Logger(logdir=logdir)
 for epoch in range(opt.epochs):
     t0 = time()
     for imgs in dataloader:
-
-        # if global_step % opt.critic_steps == 0:
-        #     genlog = trainer.generator_step(gan)
-        #     logs.update(**genlog)
+        if global_step % opt.critic_steps == 0:
+            genlog = trainer.generator_step(gan)
+            logs.update(**genlog)
 
         critlog = trainer.critic_step(gan, imgs)
         t1 = time()
-        logs['sampling_rate'] = batch_size / (t1 - t0)
         logs.update(**critlog)
-        
+        logs['sampling_rate'] = imgs.shape[0] / (t1 - t0)
         if not opt.nodp and global_step % opt.print_every == 0:
             spent = compute_renyi_privacy(
-                len(dset), batch_size, global_step + 1, opt.sigma, delta)
+                len(dset), opt.batch_size, global_step + 1, opt.sigma, delta)
             logs['epsilon'] = spent.eps
 
         log(logger, logs, 'train', gan, global_step)
