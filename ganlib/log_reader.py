@@ -30,10 +30,13 @@ class LogReader:
     def scalars(self) -> pd.DataFrame:
         scalars = {}
         for f in self.files:
-            for summary in tf.compat.v1.train.summary_iterator(f):
-                if len(summary.summary.value) == 1:
-                    t = summary.summary.value[0]
-                    scalars[(t.tag, summary.step)] = t.simple_value
+            try:
+                for summary in tf.compat.v1.train.summary_iterator(f):
+                    if len(summary.summary.value) == 1:
+                        t = summary.summary.value[0]
+                        scalars[(t.tag, summary.step)] = t.simple_value
+            except BaseException as err:
+                print(f"err reading {f}", err)
 
         scalars = pd.Series(scalars)
         scalars.index.names = ['tag', 'step']
