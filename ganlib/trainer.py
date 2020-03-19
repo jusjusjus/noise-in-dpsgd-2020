@@ -6,8 +6,6 @@ import numpy as np
 from torch import autograd
 from torch.nn.utils import clip_grad_norm_
 
-import autograd_hacks
-
 from .utils import iterate_batched
 
 cuda = torch.cuda.is_available()
@@ -119,32 +117,34 @@ class DPWGANGPTrainer(WGANGPTrainer):
         batch_size = imgs.shape[0]
         imgs = imgs.cuda()
         log = defaultdict(float)
-        gradients = {n: torch.zeros_like(p)
-                     for n, p in critic.named_parameters()}
+        gradient_sum = {n: torch.zeros_like(p)
+                        for n, p in critic.named_parameters()}
+
         with torch.no_grad():
             z = generator.get_latent_variable(batch_size)
             z = z.cuda() if cuda else z
             fake_imgs = generator(z)
 
+        log['D/penalty'] = log['D/criticism'] = 0.0
         for i, (reals, fakes) in enumerate(zip(
                 iterate_batched(imgs, self.groupsize),
                 iterate_batched(fake_imgs, self.groupsize)
             )):
-            self._critic_step(critic, reals, fakes, log, gradients)
+            self._critic_step(critic, reals, fakes, log, gradient_sum)
 
         for k, v in log.items():
             log[k] = v / float(i + 1)
 
         sigma = self.l2_clip * self.sigma
         for n, p in critic.named_parameters():
-            p.grad = (gradients[n] + sigma * torch.randn_like(p)) / batch_size
+            p.grad = (gradient_sum[n] + sigma * torch.randn_like(p)) / batch_size
 
         critic.step()
         return log
 
-    def _critic_step(self, critic, real_imgs, fake_imgs, log, gradients):
+    def _critic_step(self, critic, real_imgs, fake_imgs, log, gradient_sum):
         """
-        `gradients` summarizes gradients for individual critic parameters.
+        `gradient_sum` summarizes gradients for individual critic parameters.
         """
         batch_size = real_imgs.shape[0]
 
@@ -152,97 +152,18 @@ class DPWGANGPTrainer(WGANGPTrainer):
         real_criticism = critic(real_imgs)
 
         d_losses = fake_criticism - real_criticism
-        log['D/criticism'] += d_losses.mean().item()
-
-        # Now add the gradient penalties to the by-example d_losses.  After
-        # adding penalties we compute the penalty by subtracting previously
-        # stored d-loss alone.
+        with torch.no_grad():
+            log['D/criticism'] += d_losses.mean().item()
 
         penalties = self.calc_gradient_penalty(
             critic, real_imgs, fake_imgs, batch_size, avg=False)
-        log['D/penalty'] += penalties.mean().item()
-
-        # We don't normalize before we compute the gradient.  This means, we
-        # need to reduce the clipping compared to the norm'ed case.
+        with torch.no_grad():
+            log['D/penalty'] += penalties.mean().item()
 
         d_losses = d_losses + penalties
-
         for l, loss_l in enumerate(d_losses):
             critic.zero_grad()
             loss_l.backward(retain_graph=l < batch_size - 1)
             clip_grad_norm_(critic.parameters(), self.l2_clip, 2)
             for n, p in critic.named_parameters():
-                gradients[n] += p.grad
-
-
-class DPWGANGPTrainer2(DPWGANGPTrainer):
-
-    def initialize_critic(self, gan):
-        autograd_hacks.add_hooks(gan.critic)
-
-    def critic_step(self, gan, imgs):
-        generator = gan.generator.eval()
-        critic = gan.critic.train()
-        batch_size = imgs.shape[0]
-        real_imgs = imgs.cuda() if cuda else imgs
-        log = {}
-
-        with torch.no_grad():
-            z = generator.get_latent_variable(batch_size)
-            z = z.cuda() if cuda else z
-            fake_imgs = generator(z)
-
-        fake_criticism = critic(fake_imgs)
-        real_criticism = critic(real_imgs)
-
-        d_losses = fake_criticism - real_criticism
-        log['D/criticism'] = d_losses.mean().item()
-
-        # Now add the gradient penalties to the by-example d_losses.  After
-        # adding penalties we compute the penalty by subtracting previously
-        # stored d-loss alone.
-
-        penalties = self.calc_gradient_penalty(
-            critic, real_imgs, fake_imgs, batch_size, avg=False)
-        log['D/penalty'] = penalties.mean().item()
-
-        # Before we compute the gradient we need to normalize the loss b/c
-        # otherwise the clipping is way too tight.
-
-        d_losses = d_losses + penalties
-        d_loss = d_losses.mean()
-        from autograd_hacks.autograd_hacks import clear_backprops
-        clear_backprops(critic)
-        d_loss.backward()
-        autograd_hacks.compute_grad1(critic, 'mean')
-        for n, p in critic.named_parameters():
-            for grad1 in p.grad1:
-                print(grad1.shape)
-            assert torch.allclose(p.grad1[0].mean(dim=0), p.grad)
-            
-        exit(0)
-
-        # `gradients` summarizes gradients for individual critic parameters.
-
-        gradients = {n: torch.zeros_like(p)
-                     for n, p in critic.named_parameters()}
-
-        norms = np.zeros(len(d_losses), dtype=np.float32)
-        for l, loss_l in enumerate(d_losses):
-            critic.zero_grad()
-            loss_l.backward(retain_graph=l < batch_size - 1)
-            norms[l] = clip_grad_norm_(critic.parameters(), self.l2_clip, 2)
-            for n, p in critic.named_parameters():
-                gradients[n] += p.grad
-
-        # We don't divide sigma durch `batch_size` b/c the factor is already
-        # implicit in `l2_clip`.  Gradient clipping is done after normalizing
-        # the gradients by `batch_size`.
-
-        sigma = self.l2_clip * self.sigma
-        for n, p in critic.named_parameters():
-            p.grad = gradients[n] + sigma * torch.randn_like(p)
-
-        critic.step()
-
-        return log
+                gradient_sum[n] += p.grad
