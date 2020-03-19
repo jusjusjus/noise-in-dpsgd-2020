@@ -12,6 +12,8 @@ parser.add_argument('--splits', type=int, default=10,
                     help="boot-strapping splits")
 parser.add_argument('--quiet', action='store_true',
                     help="only output inception score")
+parser.add_argument('--train-set', action='store_true', help="Use the MNIST "
+                    "training data set (only valid for '--params MNIST').")
 opt = parser.parse_args()
 
 import torch
@@ -58,8 +60,7 @@ clf = Classifier.from_checkpoint(best_model_filename, map_location=loc).eval()
 device = next(clf.parameters()).device
 
 if opt.params == 'MNIST':
-    dset =  Dataset(train=False)
-    assert num_examples == len(dset)
+    dset =  Dataset(train=opt.train_set)
     dataloader = DataLoader(dset, batch_size=batch_size,
                             shuffle=False, num_workers=4)
 else:
