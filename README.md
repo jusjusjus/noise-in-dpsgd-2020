@@ -63,7 +63,7 @@ of the MNIST testing set.
 
 ## Reproduce Results from the Paper
 
-In /experiments we provide a number of bash scripts that will run the
+In "/experiments" we provide a number of bash scripts that will run the
 experiments to reproduce the data we show in our paper.  The results may
 slightly differ because we use different seeds.  That is intended because we
 believe that the essence of the result should not rely on the precise numerical
