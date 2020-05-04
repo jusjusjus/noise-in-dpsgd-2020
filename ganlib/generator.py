@@ -7,13 +7,21 @@ from torch.autograd import Variable
 
 def join_image_batch(images, num_rows):
     images = images.squeeze()
-    num_batch, lenx, leny = images.shape
+    if len(images.shape) == 3:
+        num_batch, lenx, leny = images.shape
+        colors = 1
+    else:
+        num_batch, colors, lenx, leny = images.shape
+        assert colors == 3
+
     num_cols = int(np.ceil(num_batch/num_rows))
-    collection = np.zeros((num_rows*lenx, num_cols*leny), dtype=images.dtype)
+    collection = np.zeros((colors, num_rows*lenx, num_cols*leny), dtype=images.dtype)
     for idx, image in enumerate(images):
         i, j = idx // num_cols, idx % num_cols
-        collection[i*lenx:(i+1)*lenx, j*leny:(j+1)*leny] = image
-    return collection
+        image = image[None, ...] if len(image.shape) == 2 else image
+        collection[:, i*lenx:(i+1)*lenx, j*leny:(j+1)*leny] = image
+
+    return collection.squeeze()
 
 
 class Optimizable(nn.Module):
@@ -68,41 +76,10 @@ class Optimizable(nn.Module):
             raise AttributeError(self._opt_err_str)
 
 
-class MNISTGenerator(Optimizable):
 
-    def __init__(self, capacity):
-        super().__init__(capacity=capacity)
-        self.latent_dim = 128
-        C = self.capacity = capacity
-        
-        lin_out_features = 4 * 4 * 4 * C
-        self.activation = nn.ReLU()
-        self.projection = nn.Linear(self.latent_dim, lin_out_features)
-        self.bn_proj = nn.BatchNorm1d(lin_out_features)
+class Generator(Optimizable):
 
-        pad = (2, 2, 2)
-        outpad = (0, 1, 1)
-        kw = {'kernel_size': 5, 'stride': 2}
-        self.deconv1 = nn.ConvTranspose2d(
-            4 * C, 2 * C, padding=pad[0], output_padding=outpad[0], **kw)
-        self.deconv2 = nn.ConvTranspose2d(
-            2 * C, 1 * C, padding=pad[1], output_padding=outpad[1], **kw)
-        self.deconv3 = nn.ConvTranspose2d(
-            1 * C,     1, padding=pad[2], output_padding=outpad[2], **kw)
-        self.output = nn.Tanh()
-
-    def forward(self, state):
-        state = self.projection(state.contiguous())
-        state = self.bn_proj(state)
-        state = self.activation(state)
-        state = state.view(-1, 4 * self.capacity, 4, 4)
-        state = self.activation(self.deconv1(state))
-        state = self.activation(self.deconv2(state))
-        return self.output(self.deconv3(state))
-
-    def get_latent_variable(self, batch_size):
-        shp = (batch_size, self.latent_dim)
-        return torch.randn(*shp, dtype=torch.float32, device=self.device)
+    latent_dim = 128
 
     def compute_sample_images(self, n: int):
         """return `n` images"""
@@ -136,3 +113,81 @@ class MNISTGenerator(Optimizable):
                     yield imgs
 
         return _dataloader()
+
+    def get_latent_variable(self, batch_size):
+        shp = (batch_size, self.latent_dim)
+        return torch.randn(*shp, dtype=torch.float32, device=self.device)
+
+
+class MNIST(Generator):
+
+    colors = 1
+
+    def __init__(self, capacity):
+        super().__init__(capacity=capacity)
+        C = self.capacity = capacity
+        
+        lin_out_features = 4 * 4 * 4 * C
+        self.activation = nn.ReLU()
+        self.projection = nn.Linear(self.latent_dim, lin_out_features)
+        self.bn_proj = nn.BatchNorm1d(lin_out_features)
+
+        pad = (2, 2, 2)
+        outpad = (0, 1, 1)
+        kw = {'kernel_size': 5, 'stride': 2}
+        self.deconv1 = nn.ConvTranspose2d(
+            4 * C, 2 * C, padding=pad[0], output_padding=outpad[0], **kw)
+        self.deconv2 = nn.ConvTranspose2d(
+            2 * C, 1 * C, padding=pad[1], output_padding=outpad[1], **kw)
+        self.deconv3 = nn.ConvTranspose2d(
+            1 * C, self.colors, padding=pad[2], output_padding=outpad[2], **kw)
+        self.output = nn.Tanh()
+
+    def forward(self, state):
+        state = self.projection(state.contiguous())
+        state = self.bn_proj(state)
+        state = self.activation(state)
+        state = state.view(-1, 4 * self.capacity, 4, 4)
+        state = self.activation(self.deconv1(state))
+        state = self.activation(self.deconv2(state))
+        return self.output(self.deconv3(state))
+
+
+class CIFAR10(Generator):
+
+    colors = 3
+
+    def __init__(self, capacity):
+        super().__init__(capacity=capacity)
+        C = self.capacity = capacity
+
+        lin_out_features = 4 * 4 * 4 * C
+        self.activation = nn.ReLU()
+        self.projection = nn.Linear(self.latent_dim, lin_out_features)
+        self.bn_proj = nn.BatchNorm1d(lin_out_features)
+
+        pad = (2, 2, 2)
+        outpad = (1, 1, 1)
+        kw = {'kernel_size': 5, 'stride': 2}
+        self.deconv1 = nn.ConvTranspose2d(
+            4 * C, 2 * C, padding=pad[0], output_padding=outpad[0], **kw)
+        self.deconv2 = nn.ConvTranspose2d(
+            2 * C, 1 * C, padding=pad[1], output_padding=outpad[1], **kw)
+        self.deconv3 = nn.ConvTranspose2d(
+            1 * C, self.colors, padding=pad[2], output_padding=outpad[2], **kw)
+        self.output = nn.Tanh()
+
+    def forward(self, state):
+        state = self.projection(state.contiguous())
+        state = self.bn_proj(state)
+        state = self.activation(state)
+        state = state.view(-1, 4 * self.capacity, 4, 4)
+        state = self.activation(self.deconv1(state))
+        state = self.activation(self.deconv2(state))
+        return self.output(self.deconv3(state))
+
+
+choices = {
+    'mnist': MNIST,
+    'cifar10': CIFAR10
+}

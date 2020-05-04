@@ -5,8 +5,9 @@ from os.path import join, dirname, exists
 from argparse import ArgumentParser
 
 parser = ArgumentParser(description="Compute inception score")
-parser.add_argument("-p", "--params", type=str, default='MNIST',
+parser.add_argument("-p", "--params", type=str, default='dataset',
                     help="'MNIST' or path to model checkpoint")
+parser.add_argument("--dataset", type=str, choices=['mnist', 'cifar10'], default='mnist')
 parser.add_argument('--cpu', action='store_true', help="use cpu only")
 parser.add_argument('--splits', type=int, default=10,
                     help="boot-strapping splits")
@@ -24,23 +25,9 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-from ganlib.generator import MNISTGenerator
-from ganlib.classifier import Classifier
-
-class Dataset(datasets.MNIST):
-
-    def __init__(self, *args, **kwargs):
-        data_dir = join('cache', 'data')
-        makedirs(data_dir, exist_ok=True)
-        super().__init__(data_dir, *args, download=True, **kwargs)
-
-    def __getitem__(self, i):
-        img, _ = super().__getitem__(i)
-        img = img.resize((28, 28), Image.ANTIALIAS)
-        img = np.array(img)[None, ...]
-        img = img.astype(np.float32) / 255.0
-        img = 2 * img - 1
-        return img
+from ganlib import dataset
+from ganlib import generator
+from ganlib import classifier
 
 
 epochs = 3
@@ -50,24 +37,25 @@ eval_every = 1000
 adapt_every = 100
 weight_decay = 0.001
 num_examples = 10000
-best_model_filename = join("cache", "mnist_classifier.ckpt")
+best_model_filename = join("cache", opt.dataset + "_classifier.ckpt")
 assert exists(best_model_filename), f"""
 No MNIST classifier found in '{best_model_filename}'.  Please build one using:
 `python build-classifier.py`"""
 
 loc = 'cpu' if opt.cpu else None
-clf = Classifier.from_checkpoint(best_model_filename, map_location=loc).eval()
+clf = classifier.choices[opt.dataset].from_checkpoint(best_model_filename, map_location=loc)
+clf = clf.eval()
 device = next(clf.parameters()).device
 
-if opt.params == 'MNIST':
-    dset =  Dataset(train=opt.train_set)
+if opt.params == 'dataset':
+    dset =  dataset.choices[opt.dataset](train=opt.train_set)
     dataloader = DataLoader(dset, batch_size=batch_size,
                             shuffle=False, num_workers=4)
 else:
     num_batches = int(10000 // batch_size)
     ckpt = torch.load(opt.params, map_location=loc)
     ckpt = ckpt['state_dict']['generator']
-    generator = MNISTGenerator.from_state_dict(ckpt)
+    generator = generator.choices[opt.dataset].from_state_dict(ckpt)
     dataloader = generator.dataloader(batch_size, num_batches)
 
 

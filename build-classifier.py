@@ -2,6 +2,12 @@
 
 from os import makedirs
 from os.path import join, dirname
+from argparse import ArgumentParser
+
+parser = ArgumentParser()
+parser.add_argument("--dataset", type=str, choices=['mnist', 'cifar10'],
+                    default='mnist')
+opt = parser.parse_args()
 
 import torch
 import numpy as np
@@ -11,8 +17,8 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, ToTensor, Normalize, RandomAffine
 
-from ganlib.dataset import Dataset
-from ganlib.classifier import Classifier
+from ganlib import dataset
+from ganlib import classifier
 
 torch.manual_seed(42 * 42)
 
@@ -39,14 +45,28 @@ def schedule(lr, loss):
     return lr if loss > 1.0 else loss * lr
 
 
-epochs = 20
-batch_size = 128
-lr_per_example = 1e-4
+epochs = {
+    'mnist': 20,
+    'cifar10': 40
+}[opt.dataset]
+batch_size = {
+    'mnist': 128,
+    'cifar10': 512
+}[opt.dataset]
+lr_per_example = {
+    'mnist': 1e-4,
+    'cifar10': 1e-5
+}[opt.dataset]
 eval_every = 1000
 adapt_every = 100
-weight_decay = 0.001
-best_model_filename = join("cache", "mnist_classifier.ckpt")
+weight_decay = {
+    'mnist': 0.001,
+    'cifar10': 0.001
+}[opt.dataset]
+best_model_filename = join("cache", opt.dataset + "_classifier.ckpt")
 makedirs(dirname(best_model_filename), exist_ok=True)
+
+dset_class = dataset.choices[opt.dataset]
 
 learning_rate = batch_size * lr_per_example
 
@@ -55,18 +75,18 @@ print(f"learning rate: {learning_rate} (at {batch_size}-minibatches)")
 trafo = Compose([RandomAffine(degrees=10, shear=10, scale=(0.95, 1.15)),
                  ToTensor(), Normalize([0.5], [0.5], inplace=True)])
 
-trainset =  Dataset(transform=trafo, train=True, labels=True)
-testset =  Dataset(train=False, labels=True)
+trainset = dset_class(transform=trafo, train=True, labels=True)
+testset = dset_class(train=False, labels=True)
 trainloader = DataLoader(trainset, batch_size=batch_size,
                          shuffle=True, num_workers=4)
 testloader = DataLoader(testset, batch_size=batch_size,
                         shuffle=False, num_workers=4)
 
-clf = Classifier()
+clf = classifier.choices[opt.dataset]()
 clf = clf.cuda() if torch.cuda.is_available() else clf
 clf.train()
 device = next(clf.parameters()).device
-print(device)
+print(f"Training on device '{device}'")
 
 loss_op = nn.NLLLoss(reduction='mean')
 optimizer = optim.Adam(clf.parameters(), lr=learning_rate, weight_decay=weight_decay)

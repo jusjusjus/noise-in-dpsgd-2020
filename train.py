@@ -8,6 +8,7 @@ from time import time
 from argparse import ArgumentParser
 
 parser = ArgumentParser(description="Train MNIST generator with DP-WGAN-GP")
+parser.add_argument("--dataset", type=str, choices=['mnist', 'cifar10'], default='mnist')
 parser.add_argument('--capacity', type=int, default=64,
                     help="number-of-filters factor in GAN")
 parser.add_argument('--critic-steps', type=int, default=4,
@@ -43,22 +44,22 @@ torch.manual_seed(opt.seed)
 from ganlib import scripts
 from ganlib.gan import GenerativeAdversarialNet
 from ganlib.logger import Logger
-from ganlib.dataset import Dataset
+from ganlib import dataset
 from ganlib.privacy import compute_renyi_privacy
 from ganlib.trainer import DPWGANGPTrainer, WGANGPTrainer
-from ganlib.generator import MNISTGenerator, Optimizable
+from ganlib import generator
 
 cuda = torch.cuda.is_available()
 
 
-class MNISTCritic(Optimizable):
+class Critic(generator.Optimizable):
 
-    def __init__(self, capacity):
+    def __init__(self, colors, capacity):
         super().__init__()
         C = capacity
         kw = {'padding': 2, 'stride': 2, 'kernel_size': 5}
         self.activation = nn.LeakyReLU(negative_slope=0.2)
-        self.conv1 = nn.Conv2d(1,     1 * C, **kw)
+        self.conv1 = nn.Conv2d(colors, 1 * C, **kw)
         self.conv2 = nn.Conv2d(1 * C, 2 * C, **kw)
         self.conv3 = nn.Conv2d(2 * C, 4 * C, **kw)
         self.flatten = nn.Flatten()
@@ -84,10 +85,10 @@ def log(logger, info, tag, network, global_step):
     if global_step % opt.eval_every == 0:
         ckpt = logger.add_checkpoint(network, global_step)
         scripts.generate(logger=logger, params=ckpt,
-                         step=global_step)
-        if exists(join("cache", "mnist_classifier.ckpt")):
+                         step=global_step, dataset=opt.dataset)
+        if exists(join("cache", opt.dataset + "_classifier.ckpt")):
             scripts.inception(logger=logger, params=ckpt,
-                              step=global_step)
+                              step=global_step, dataset=opt.dataset)
         network.train()
 
 # Set default parameters
@@ -99,19 +100,19 @@ lr_per_example = 3.125e-6
 
 learning_rate = opt.batch_size * lr_per_example
 logdir = join('cache', 'logs')
-logdir = join(logdir, f"cap_{opt.capacity}-steps_{opt.critic_steps}-batchsize_{opt.batch_size}")
+logdir = join(logdir, f"dset_{opt.dataset}-cap_{opt.capacity}-steps_{opt.critic_steps}-batchsize_{opt.batch_size}")
 if not opt.nodp:
     logdir += f"-sig_{opt.sigma}-clip_{opt.grad_clip}"
 
 # Initialize generator and critic.  We wrap generator and critic into
 # `GenerativeAdversarialNet` and provide methods `cuda` and `state_dict`
 
-generator = MNISTGenerator(opt.capacity)
-critic = MNISTCritic(opt.capacity)
+generator = generator.choices[opt.dataset](opt.capacity)
+critic = Critic(generator.colors, opt.capacity)
 gan = GenerativeAdversarialNet(generator, critic)
 gan = gan.cuda() if cuda else gan
 
-dset = Dataset()
+dset = dataset.choices[opt.dataset]()
 dataloader = DataLoader(dset, batch_size=opt.batch_size,
                         shuffle=True, num_workers=4)
 

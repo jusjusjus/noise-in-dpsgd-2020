@@ -20,16 +20,16 @@ def threaded(fn):
     return wrapped
 
 @threaded
-def generate(logger, params: str, step: int) -> None:
+def generate(logger, params: str, step: int, dataset: str = 'mnist') -> None:
     script = join(base_dir, 'generate.py')
     temp = join(cache_dir, splitext(basename(params))[0] + '.png')
-    cmd = [script, params, "-o", temp, "--cpu"]
+    cmd = [script, params, "-o", temp, "--cpu", "--dataset", dataset]
     check_output(cmd)
     logger.add_image_file('generated', temp, step)
     check_output(["rm", temp])
 
 @threaded
-def inception(logger, params: str, step: int) -> None:
+def inception(logger, params: str, step: int, dataset: str = 'mnist') -> None:
     assert exists(join(base_dir, "cache", "mnist_classifier.ckpt")), """
     Inception during training failed: missing classifier."""
     cmd = [
@@ -37,7 +37,8 @@ def inception(logger, params: str, step: int) -> None:
         "-p", params,
         "--cpu",
         "--splits", "1",
-        "--quiet"
+        "--quiet",
+        "--dataset", dataset
     ]
     output = check_output(cmd)
     score = float(output.decode('utf-8'))
