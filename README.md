@@ -69,6 +69,14 @@ slightly differ because we use different seeds.  That is intended because we
 believe that the essence of the result should not rely on the precise numerical
 outcome.
 
+## CIFAR-10
+
+You can train the cifar-10 model using `./build-classifier.py --dataset
+cifar10`.  This will run for 200 epochs and it achieves an accuracy of about
+90\%.  After, you can verify the inception score on the real dataset.  We
+recieved `I=8.467 +/- 0.081` on the test data, and `9.170 +/- 0.023` on the
+train data.
+
 ## Authors
 
 * Justus Schwabedal
