@@ -46,29 +46,35 @@ class CIFAR10(nn.Sequential):
 
     def __init__(self):
 
-        C = 128
-        dropout = 0.5
+        C = 32
 
         super().__init__(
-            nn.Conv2d(3, C, 5, padding=2),
-            nn.ReLU(),
-            nn.MaxPool2d(3, 2, 1),
+            nn.Conv2d(3, C, 3, padding=1), nn.ReLU(),
             nn.BatchNorm2d(C),
-            nn.Conv2d(C, 2 * C, 5, padding=2),
-            nn.ReLU(),
-            nn.MaxPool2d(3, 2, 1),
+            nn.Conv2d(C, C, 3, padding=1), nn.ReLU(),
+            nn.BatchNorm2d(C),
+            nn.MaxPool2d(kernel_size=2, stride=1, padding=1),
+            nn.Dropout(0.2),
+
+            nn.Conv2d(    C, 2 * C, 3, padding=1), nn.ReLU(),
             nn.BatchNorm2d(2 * C),
-            nn.Conv2d(2 * C, 4 * C, 5, padding=2),
-            nn.ReLU(),
-            nn.MaxPool2d(3, 2, 1),
+            nn.Conv2d(2 * C, 2 * C, 3, padding=1), nn.ReLU(),
+            nn.BatchNorm2d(2 * C),
+            nn.MaxPool2d(kernel_size=2, stride=1, padding=1),
+            nn.Dropout(0.3),
+
+            nn.Conv2d(2 * C, 4 * C, 3, padding=1), nn.ReLU(),
             nn.BatchNorm2d(4 * C),
+            nn.Conv2d(4 * C, 4 * C, 3, padding=1), nn.ReLU(),
+            nn.BatchNorm2d(4 * C),
+            nn.MaxPool2d(kernel_size=2, stride=1, padding=1),
+            nn.Dropout(0.4),
             nn.Flatten(),
-            nn.Linear(4 * C * 4 ** 2, 1024),
-            nn.BatchNorm1d(1024),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(1024, 10),
-            nn.LogSoftmax(dim=1)
+
+            nn.Linear(156800, 128), nn.ReLU(),
+            nn.BatchNorm1d(128),
+            nn.Dropout(p=0.5),
+            nn.Linear(128, 10), nn.LogSoftmax(dim=1)
         )
 
     def probabilities(self, images):

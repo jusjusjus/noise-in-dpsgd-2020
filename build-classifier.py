@@ -15,7 +15,8 @@ from PIL import Image
 from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader
-from torchvision.transforms import Compose, ToTensor, Normalize, RandomAffine
+from torchvision.transforms import (Compose, ToTensor, Normalize,
+                                    RandomAffine, RandomHorizontalFlip)
 
 from ganlib import dataset
 from ganlib import classifier
@@ -47,7 +48,7 @@ def schedule(lr, loss):
 
 epochs = {
     'mnist': 20,
-    'cifar10': 40
+    'cifar10': 200
 }[opt.dataset]
 batch_size = {
     'mnist': 128,
@@ -55,13 +56,13 @@ batch_size = {
 }[opt.dataset]
 lr_per_example = {
     'mnist': 1e-4,
-    'cifar10': 1e-5
+    'cifar10': 0.001 / 64
 }[opt.dataset]
 eval_every = 1000
 adapt_every = 100
 weight_decay = {
     'mnist': 0.001,
-    'cifar10': 0.001
+    'cifar10': 0.0,
 }[opt.dataset]
 best_model_filename = join("cache", opt.dataset + "_classifier.ckpt")
 makedirs(dirname(best_model_filename), exist_ok=True)
@@ -72,8 +73,17 @@ learning_rate = batch_size * lr_per_example
 
 print(f"learning rate: {learning_rate} (at {batch_size}-minibatches)")
 
-trafo = Compose([RandomAffine(degrees=10, shear=10, scale=(0.95, 1.15)),
-                 ToTensor(), Normalize([0.5], [0.5], inplace=True)])
+# Data augmentation
+if opt.dataset == 'mnist':
+    trafo = Compose([RandomAffine(degrees=10, shear=10, scale=(0.95, 1.15)),
+                     ToTensor(), Normalize([0.5], [0.5], inplace=True)])
+elif opt.dataset == 'cifar10':
+    trafo = Compose([
+        RandomAffine(degrees=10, shear=5, scale=(0.95, 1.15), translate=(0.1, 0.1)),
+        RandomHorizontalFlip(),
+        ToTensor(),
+        Normalize([0.5], [0.5], inplace=True)
+    ])
 
 trainset = dset_class(transform=trafo, train=True, labels=True)
 testset = dset_class(train=False, labels=True)
@@ -89,7 +99,13 @@ device = next(clf.parameters()).device
 print(f"Training on device '{device}'")
 
 loss_op = nn.NLLLoss(reduction='mean')
-optimizer = optim.Adam(clf.parameters(), lr=learning_rate, weight_decay=weight_decay)
+
+if opt.dataset == 'mnist':
+    optimizer = optim.Adam(clf.parameters(), lr=learning_rate, weight_decay=weight_decay)
+elif opt.dataset == 'cifar10':
+    optimizer = optim.SGD(clf.parameters(), lr=learning_rate, momentum=0.9)
+else:
+    raise ValueError(f"Unknown dataset {opt.dataset}")
 
 global_step, running_loss = 0, 1.0
 best_acc = 2.0
@@ -107,7 +123,10 @@ for epoch in range(epochs):
         running_loss = 0.99 * running_loss + 0.01 * loss.item()
 
         if global_step % adapt_every == 0:
-            lr = 0.9 ** epoch * schedule(learning_rate, running_loss)
+            if opt.dataset == 'mnist':
+                lr = 0.9 ** epoch * schedule(learning_rate, running_loss)
+            elif opt.dataset == 'cifar10':
+                lr = 0.99 ** epoch * learning_rate
             print(f"[{global_step}, epoch {epoch+1}] "
                   f"train loss = {running_loss:.3f}, "
                   f"new learning rate = {lr:.5f}")
