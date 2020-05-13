@@ -7,6 +7,8 @@ from argparse import ArgumentParser
 parser = ArgumentParser()
 parser.add_argument("--dataset", type=str, choices=['mnist', 'cifar10'],
                     default='mnist')
+parser.add_argument("--best-model-filename", type=str, default=None)
+parser.add_argument("--nesterov", action="store_true")
 opt = parser.parse_args()
 
 import torch
@@ -64,7 +66,8 @@ weight_decay = {
     'mnist': 0.001,
     'cifar10': 0.0,
 }[opt.dataset]
-best_model_filename = join("cache", opt.dataset + "_classifier.ckpt")
+best_model_filename = opt.best_model_filename or join(
+        "cache", opt.dataset + "_classifier.ckpt")
 makedirs(dirname(best_model_filename), exist_ok=True)
 
 dset_class = dataset.choices[opt.dataset]
@@ -103,7 +106,8 @@ loss_op = nn.NLLLoss(reduction='mean')
 if opt.dataset == 'mnist':
     optimizer = optim.Adam(clf.parameters(), lr=learning_rate, weight_decay=weight_decay)
 elif opt.dataset == 'cifar10':
-    optimizer = optim.SGD(clf.parameters(), lr=learning_rate, momentum=0.9)
+    optimizer = optim.SGD(clf.parameters(), lr=learning_rate, momentum=0.9,
+                          nesterov=opt.nesterov)
 else:
     raise ValueError(f"Unknown dataset {opt.dataset}")
 

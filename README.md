@@ -75,7 +75,9 @@ You can train the cifar-10 model using `./build-classifier.py --dataset
 cifar10`.  This will run for 200 epochs and it achieves an accuracy of about
 90\%.  After, you can verify the inception score on the real dataset.  We
 recieved `I=8.467 +/- 0.081` on the test data, and `9.170 +/- 0.023` on the
-train data.
+train data.  There is an option `--nesterov` to train with Nesterov accelerated
+gradients.  While this doesn't improve the outcome it produces a faster
+training.
 
 ## Authors
 
