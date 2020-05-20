@@ -11,6 +11,7 @@ parser.add_argument('--dataset', type=str, choices=["mnist", "cifar10"], default
 parser.add_argument('-o', type=str, default=None, help="output file name (.png/.jpg)")
 parser.add_argument('--num-rows', type=int, default=4, help="number of rows to plot")
 parser.add_argument('--cpu', action='store_true', help="use cpu only")
+parser.add_argument('--version', type=str, default=None, help="use cpu only")
 opt = parser.parse_args()
 
 import torch
@@ -46,8 +47,10 @@ cuda = torch.cuda.is_available() and not opt.cpu
 num_images = opt.num_rows ** 2
 # load generator and generate images
 ckpt = torch.load(opt.params, map_location='cpu' if opt.cpu else None)
-G = generator.choices[opt.dataset].from_state_dict(
+choice = opt.version or opt.dataset
+G = generator.choices[choice].from_state_dict(
         ckpt['state_dict']['generator'])
+
 G = G.cuda() if cuda else G
 images = G.compute_sample_images(num_images)
 # join and plot images
