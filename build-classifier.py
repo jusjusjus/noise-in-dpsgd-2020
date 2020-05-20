@@ -48,24 +48,17 @@ def schedule(lr, loss):
     return lr if loss > 1.0 else loss * lr
 
 
-epochs = {
-    'mnist': 20,
-    'cifar10': 200
-}[opt.dataset]
-batch_size = {
-    'mnist': 128,
-    'cifar10': 512
-}[opt.dataset]
-lr_per_example = {
-    'mnist': 1e-4,
-    'cifar10': 0.001 / 64
-}[opt.dataset]
+if 'mnist' == opt.dataset:
+    epochs = 20
+    batch_size = 128
+    lr_per_example = 1e-4
+elif 'cifar10' == opt.dataset:
+    epochs = 200
+    batch_size = 512
+    lr_per_example = 0.001 / 64
+
 eval_every = 1000
 adapt_every = 100
-weight_decay = {
-    'mnist': 0.001,
-    'cifar10': 0.0,
-}[opt.dataset]
 best_model_filename = opt.best_model_filename or join(
         "cache", opt.dataset + "_classifier.ckpt")
 makedirs(dirname(best_model_filename), exist_ok=True)
@@ -77,10 +70,13 @@ learning_rate = batch_size * lr_per_example
 print(f"learning rate: {learning_rate} (at {batch_size}-minibatches)")
 
 # Data augmentation
-if opt.dataset == 'mnist':
-    trafo = Compose([RandomAffine(degrees=10, shear=10, scale=(0.95, 1.15)),
-                     ToTensor(), Normalize([0.5], [0.5], inplace=True)])
-elif opt.dataset == 'cifar10':
+if 'mnist' == opt.dataset:
+    trafo = Compose([
+        RandomAffine(degrees=10, shear=10, scale=(0.95, 1.15)),
+        ToTensor(),
+        Normalize([0.5], [0.5], inplace=True)
+    ])
+if 'cifar10' == opt.dataset:
     trafo = Compose([
         RandomAffine(degrees=10, shear=5, scale=(0.95, 1.15), translate=(0.1, 0.1)),
         RandomHorizontalFlip(),
@@ -103,13 +99,11 @@ print(f"Training on device '{device}'")
 
 loss_op = nn.NLLLoss(reduction='mean')
 
-if opt.dataset == 'mnist':
-    optimizer = optim.Adam(clf.parameters(), lr=learning_rate, weight_decay=weight_decay)
-elif opt.dataset == 'cifar10':
+if 'mnist' == opt.dataset:
+    optimizer = optim.Adam(clf.parameters(), lr=learning_rate, weight_decay=0.001)
+if 'cifar10' == opt.dataset:
     optimizer = optim.SGD(clf.parameters(), lr=learning_rate, momentum=0.9,
                           nesterov=opt.nesterov)
-else:
-    raise ValueError(f"Unknown dataset {opt.dataset}")
 
 global_step, running_loss = 0, 1.0
 best_acc = 2.0
