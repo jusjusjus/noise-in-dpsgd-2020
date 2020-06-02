@@ -92,6 +92,7 @@ class CIFAR10(nn.Sequential):
     def to_checkpoint(self, ckpt):
         torch.save(self.state_dict(), ckpt)
 
+<<<<<<< HEAD
 choices = {
     'mnist': MNIST,
     'wide_resnet':WideResNet,
@@ -197,3 +198,10 @@ class WideResNet(nn.Module):
         instance.load_state_dict(ckpt)
         return instance
 
+=======
+
+choices = {
+    'mnist': MNIST,
+    'cifar10': CIFAR10
+}
+>>>>>>> 7d1284d8a0d58f88bc0bf3a42b6f0afcf484c6ba
