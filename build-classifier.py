@@ -80,12 +80,15 @@ if 'mnist' == opt.dataset:
     adapt_every = 100
     print(f"learning rate: {learning_rate} (at {batch_size}-minibatches)")
 
+    normalize = [ToTensor(), Normalize([0.5], [0.5], inplace=True)]
+
     # Data augmentation
     train_transform = Compose([
         RandomAffine(degrees=10, shear=10, scale=(0.95, 1.15)),
-        ToTensor(),
-        Normalize([0.5], [0.5], inplace=True)
+        *normalize
     ])
+
+    test_transform = transforms.Compose(normalize)
 
     clf = classifier.choices[opt.dataset]()
 
@@ -107,10 +110,12 @@ elif 'cifar10' == opt.dataset:
     if opt.data_augmentation:
         train_transform.transforms.append(RandomCrop(32, padding=4))
         train_transform.transforms.append(RandomHorizontalFlip())
+
     train_transform.transforms.append(ToTensor())
     train_transform.transforms.append(normalize)
     if opt.cutout:
         train_transform.transforms.append(Cutout(n_holes=opt.n_holes, length=opt.length)) 
+
     test_transform = transforms.Compose([
         ToTensor(),
         normalize])
